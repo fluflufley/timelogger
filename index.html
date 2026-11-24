@@ -110,7 +110,7 @@
 
       <div class="card">
         <div class="card-head">
-          <h2>Breakdown</h2>
+          <h2>Breakdown <span class="hint-inline">tap a color dot to change it</span></h2>
           <div class="seg small" id="groupSeg">
             <button data-group="activity" class="on">Activity</button>
             <button data-group="tag">#Tag</button>
@@ -149,6 +149,11 @@
       <label class="field">Activity
         <input name="activity" list="activityList" dir="auto" maxlength="500" placeholder="Empty = untracked time">
       </label>
+      <div class="color-row" id="editColorRow" hidden>
+        <button type="button" class="swatch" id="editColorBtn" aria-label="Change color"></button>
+        <span class="muted small" id="editColorText"></span>
+        <span class="small link">change</span>
+      </div>
       <div class="two">
         <label class="field">Start
           <input type="datetime-local" name="start" step="60" required>
@@ -172,6 +177,19 @@
         <button type="submit" class="btn primary">Save</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- color dialog -->
+  <dialog id="colorDialog">
+    <h2>Color</h2>
+    <p class="color-what"><strong id="colorWhat" dir="auto"></strong> <span class="muted small" id="colorMode"></span></p>
+    <div class="swatches" id="swatches"></div>
+    <label class="custom-color">Custom color <input type="color" id="customColor"></label>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="resetColor">Back to automatic</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn primary" id="closeColor">Done</button>
+    </div>
   </dialog>
 
   <!-- menu dialog -->

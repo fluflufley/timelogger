@@ -26,6 +26,21 @@ export function sanitize(e) {
   };
 }
 
+const LS_SETTINGS = 'timelog.settings.v1';
+
+export function sanitizeSettings(v) {
+  const colors = {};
+  const src = v && typeof v.colors === 'object' && v.colors ? v.colors : {};
+  for (const [k, c] of Object.entries(src).slice(0, 1000)) {
+    if (typeof k === 'string' && k.length <= 500 && /^#[0-9a-f]{6}$/i.test(c)) colors[k] = c.toLowerCase();
+  }
+  return { colors };
+}
+
+function readLocalSettings() {
+  try { return sanitizeSettings(JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}')); } catch { return { colors: {} }; }
+}
+
 export function readLocalEntries() {
   try {
     const v = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
@@ -44,12 +59,23 @@ export function clearLocalEntries() {
 export class LocalStore {
   mode = 'local';
 
-  async init({ onEntries, onStatus }) {
+  async init({ onEntries, onStatus, onSettings }) {
     this.onEntries = onEntries;
+    this.onSettings = onSettings;
     onStatus?.({ state: 'local' });
     // keep several open tabs in sync
-    window.addEventListener('storage', (e) => { if (e.key === LS_KEY) this.emit(); });
+    window.addEventListener('storage', (e) => {
+      if (e.key === LS_KEY) this.emit();
+      if (e.key === LS_SETTINGS) onSettings?.(readLocalSettings());
+    });
+    onSettings?.(readLocalSettings());
     this.emit();
+  }
+
+  async saveSettings(settings) {
+    const clean = sanitizeSettings(settings);
+    localStorage.setItem(LS_SETTINGS, JSON.stringify(clean));
+    this.onSettings?.(clean);
   }
 
   emit() { this.onEntries(sortEntries(readLocalEntries())); }
@@ -100,15 +126,24 @@ class FirebaseStore {
     this.unsub = null;
   }
 
-  async init({ onEntries, onStatus, onUser }) {
+  async init({ onEntries, onStatus, onUser, onSettings }) {
     const { A, F } = this;
+    this.onSettings = onSettings;
     A.getRedirectResult(this.auth).catch((err) => onStatus?.({ state: 'error', message: err.message }));
     A.onAuthStateChanged(this.auth, (user) => {
       this.user = user;
       this.unsub?.();
       this.unsub = null;
+      this.unsubSettings?.();
+      this.unsubSettings = null;
       onUser?.(user);
-      if (!user) { onEntries([]); return; }
+      if (!user) { onEntries([]); onSettings?.({ colors: {} }); return; }
+      this.unsubSettings = F.onSnapshot(this.settingsDoc(), (snap) => {
+        onSettings?.(sanitizeSettings(snap.data() || {}));
+      }, (err) => {
+        console.warn('Settings unavailable:', err.message);
+        this.settingsError = err;
+      });
       this.unsub = F.onSnapshot(this.col(), { includeMetadataChanges: true }, (snap) => {
         onEntries(sortEntries(snap.docs.map((d) => sanitize({ id: d.id, ...d.data() }))));
         onStatus?.({
@@ -120,6 +155,22 @@ class FirebaseStore {
   }
 
   col() { return this.F.collection(this.db, 'users', this.user.uid, 'entries'); }
+
+  settingsDoc() { return this.F.doc(this.db, 'users', this.user.uid, 'settings', 'prefs'); }
+
+  async saveSettings(settings) {
+    if (!this.user) throw new Error('Not signed in');
+    const clean = sanitizeSettings(settings);
+    this.onSettings?.(clean); // show immediately
+    try {
+      await this.F.setDoc(this.settingsDoc(), { ...clean, updatedAt: this.F.serverTimestamp() });
+    } catch (e) {
+      if (e.code === 'permission-denied') {
+        throw new Error('Firestore rules need updating to save colors – paste the new firestore.rules into Firebase (see README)');
+      }
+      throw e;
+    }
+  }
 
   async signIn() {
     const { A } = this;

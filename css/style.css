@@ -224,6 +224,26 @@ dialog h2 { font-size: 1.15rem; margin-bottom: 14px; }
 .spacer { flex: 1; }
 .menu p { margin: 0 0 6px; }
 
+/* ---------- colors */
+.swatch {
+  width: 14px; height: 14px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; flex: none;
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--ink) 15%, transparent);
+  vertical-align: -2px; margin-right: 8px;
+}
+.swatch:hover { transform: scale(1.2); }
+.swatch.big { width: 34px; height: 34px; margin: 0; }
+.swatch.big.on { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--ink); }
+.swatches { display: grid; grid-template-columns: repeat(6, 34px); gap: 12px; justify-content: start; margin: 14px 0 16px; }
+.custom-color { display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); font-weight: 600; }
+.custom-color input { width: 44px; height: 32px; padding: 2px; cursor: pointer; }
+.color-what { margin: 0; }
+.color-row { display: flex; align-items: center; gap: 2px; margin: -2px 0 12px; cursor: pointer; }
+.color-row .link { color: var(--accent); margin-left: 8px; font-weight: 600; }
+.hint-inline { font-size: .72rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+@media (max-width: 520px) { .hint-inline { display: none; } }
+.legend-item { border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; max-width: 14em; }
+.legend-item:hover { color: var(--ink); }
+
 /* ---------- toast */
 .toast {
   position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%);

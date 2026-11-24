@@ -53,7 +53,9 @@ const PALETTE = ['#d9643a', '#3f86c7', '#4fa36c', '#c49a1e', '#9a63c9', '#d1506f
 const OTHER = '#9a958b';
 let colorMap = new Map();
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
-function colorFor(key) { return colorMap.get(key) || PALETTE[hash(key) % PALETTE.length]; }
+const EXTRA = ['#8b5a3c', '#6f7c8a', '#e3b505', '#1f6f5c', '#e07fb0', '#4b3fa8'];
+const SWATCHES = [...PALETTE, ...EXTRA];
+function colorFor(key) { return state.colors[key] || colorMap.get(key) || PALETTE[hash(key) % PALETTE.length]; }
 
 /* ================================================================= state */
 
@@ -68,6 +70,7 @@ const state = {
   mode: 'local',
   user: null,
   sync: { state: 'local' },
+  colors: {}, // user-chosen colors: { 'deep work #work': '#3f86c7', '#work': '#d9643a' }
   loaded: false,
 };
 let store;
@@ -103,9 +106,25 @@ function recomputeColors() {
   }
   const acts = [...totals].filter(([k]) => !k.startsWith('#')).sort((a, b) => b[1] - a[1]);
   const tags = [...totals].filter(([k]) => k.startsWith('#')).sort((a, b) => b[1] - a[1]);
+  // automatic colors by rank (biggest first). Picking a color yourself doesn't
+  // shuffle the others; an automatic color that clashes with one you picked
+  // moves to a free palette color instead.
   colorMap = new Map();
-  acts.slice(0, PALETTE.length).forEach(([k], i) => colorMap.set(k, PALETTE[i]));
-  tags.slice(0, PALETTE.length).forEach(([k], i) => colorMap.set(k, PALETTE[i]));
+  const picked = new Set(Object.values(state.colors));
+  for (const group of [acts, tags]) {
+    const ranked = group.slice(0, PALETTE.length);
+    const taken = new Set(picked);
+    ranked.forEach(([k], i) => { if (!state.colors[k] && !picked.has(PALETTE[i])) taken.add(PALETTE[i]); });
+    ranked.forEach(([k], i) => {
+      if (state.colors[k]) return;
+      let c = PALETTE[i];
+      if (picked.has(c)) {
+        c = PALETTE.find((x) => !taken.has(x)) || c;
+        taken.add(c);
+      }
+      colorMap.set(k, c);
+    });
+  }
 }
 
 function* daySlices(s, e) {
@@ -332,7 +351,7 @@ function renderLog() {
     const pct = st.total ? Math.round((g.ms / st.total) * 100) : 0;
     const c = g.key === '(untagged)' ? OTHER : colorFor(g.key);
     return `<li style="--c:${c}">
-      <div class="bar-head"><span class="bar-label" dir="auto">${state.groupBy === 'tag' ? esc(g.label) : withTags(g.label)}</span>
+      <div class="bar-head"><span class="bar-label" dir="auto">${g.key === '(untagged)' ? '' : `<button class="swatch" data-color-key="${esc(g.key)}" data-color-label="${esc(g.label)}" style="background:${c}" title="Change color" aria-label="Change color for ${esc(g.label)}"></button>`}${state.groupBy === 'tag' ? esc(g.label) : withTags(g.label)}</span>
       <span class="bar-val">${fmtDur(g.ms)} <span class="muted">· ${pct}%</span></span></div>
       <div class="bar"><span style="width:${(g.ms / max) * 100}%"></span></div></li>`;
   }).join('') : '<li class="empty muted">No tracked time in this range.</li>';
@@ -406,7 +425,8 @@ function stackedChart(st, rs, re, nDays) {
   const legend = st.groups.length ? `<div class="legend">${topKeys.map((k) => {
     const g = st.groups.find((x) => x.key === k);
     const c = k === '(untagged)' ? OTHER : colorFor(k);
-    return `<span><i style="background:${c}"></i><span dir="auto">${esc(g.label)}</span></span>`;
+    return k === '(untagged)' ? `<span><i style="background:${c}"></i>${esc(g.label)}</span>`
+      : `<button class="legend-item" data-color-key="${esc(k)}" data-color-label="${esc(g.label)}" title="Change color"><i style="background:${c}"></i><span dir="auto">${esc(g.label)}</span></button>`;
   }).join('')}${st.groups.length > 7 ? `<span><i style="background:${OTHER}"></i>Other</span>` : ''}</div>` : '';
   return `<div class="chart-wrap"><div class="chart-max muted">${fmtDur(max)}</div><div class="cols">${cols}</div></div>${legend}`;
 }
@@ -512,6 +532,7 @@ function openEdit(entry) {
   f.note.value = entry?.note || '';
   $('#deleteBtn').hidden = !entry;
   updateEditHints();
+  updateEditColor();
   $('#editDialog').showModal();
   if (!entry) f.activity.focus();
 }
@@ -606,6 +627,47 @@ function deleteEdit() {
   apply([{ op: 'delete', id: e.id }]);
   $('#editDialog').close();
   toast('Deleted');
+}
+
+/* ========================================================== color picker */
+
+let colorEditing = null; // { key, label }
+
+function openColor(key, label) {
+  colorEditing = { key, label };
+  $('#colorWhat').textContent = label;
+  renderSwatches();
+  $('#colorDialog').showModal();
+}
+
+function renderSwatches() {
+  const { key } = colorEditing;
+  const cur = colorFor(key);
+  const custom = state.colors[key];
+  $('#swatches').innerHTML = SWATCHES.map((c) => `<button type="button" class="swatch big${c === cur ? ' on' : ''}" data-c="${c}" style="background:${c}" aria-label="${c}"></button>`).join('');
+  $('#customColor').value = cur;
+  $('#colorMode').textContent = custom ? 'Your choice' : 'Automatic';
+  $('#resetColor').hidden = !custom;
+}
+
+function setColor(key, color) {
+  const colors = { ...state.colors };
+  if (color) colors[key] = color.toLowerCase(); else delete colors[key];
+  state.colors = colors;
+  recomputeColors();
+  renderSwatches();
+  store.saveSettings({ colors }).catch((err) => { console.error(err); toast(err.message, true); });
+}
+
+function updateEditColor() {
+  const a = clean($('#editForm').activity.value);
+  $('#editColorRow').hidden = !a;
+  if (!a) return;
+  const btn = $('#editColorBtn');
+  btn.style.background = colorFor(norm(a));
+  btn.dataset.colorKey = norm(a);
+  btn.dataset.colorLabel = a;
+  $('#editColorText').textContent = `Color for all “${a}” entries`;
 }
 
 /* ======================================================== export/import */
@@ -776,7 +838,30 @@ for (const sel of ['#todayList', '#logList']) {
 
 $('#addEntryBtn').addEventListener('click', () => openEdit(null));
 $('#editForm').addEventListener('submit', saveEdit);
-$('#editForm').addEventListener('input', (e) => { if (['start', 'end'].includes(e.target.name)) updateEditHints(); });
+$('#editForm').addEventListener('input', (e) => {
+  if (['start', 'end'].includes(e.target.name)) updateEditHints();
+  if (e.target.name === 'activity') updateEditColor();
+});
+
+// anything with data-color-key opens the color picker
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-color-key]');
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openColor(b.dataset.colorKey, b.dataset.colorLabel || b.dataset.colorKey);
+}, true);
+$('#swatches').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-c]');
+  if (b) setColor(colorEditing.key, b.dataset.c);
+});
+$('#editColorRow').addEventListener('click', (e) => { if (!e.target.closest('#editColorBtn')) $('#editColorBtn').click(); });
+$('#customColor').addEventListener('change', (e) => setColor(colorEditing.key, e.target.value));
+$('#resetColor').addEventListener('click', () => setColor(colorEditing.key, null));
+$('#closeColor').addEventListener('click', () => $('#colorDialog').close());
+$('#colorDialog').addEventListener('close', () => {
+  if ($('#editDialog').open) updateEditColor(); else render();
+});
 $('#cancelEdit').addEventListener('click', () => $('#editDialog').close());
 $('#deleteBtn').addEventListener('click', deleteEdit);
 $('#editDialog').addEventListener('close', () => render());
@@ -792,7 +877,7 @@ $('#importFile').addEventListener('change', (e) => {
 
 $('#menuBtn').addEventListener('click', openMenu);
 $('#closeMenu').addEventListener('click', () => $('#menuDialog').close());
-for (const d of ['#editDialog', '#menuDialog']) {
+for (const d of ['#editDialog', '#menuDialog', '#colorDialog']) {
   $(d).addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
 }
 $('#signInBtn').addEventListener('click', async () => {
@@ -836,6 +921,11 @@ async function boot() {
       if (!$('#editDialog').open) render();
     },
     onStatus: (s) => { state.sync = s; renderSync(); },
+    onSettings: (st) => {
+      state.colors = st.colors || {};
+      recomputeColors();
+      if (!$('#editDialog').open && !$('#colorDialog').open) render();
+    },
     onUser: (u) => { state.user = u; state.loaded = true; render(); },
   });
 }
