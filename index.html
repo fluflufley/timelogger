@@ -110,7 +110,7 @@
 
       <div class="card">
         <div class="card-head">
-          <h2>Breakdown <span class="hint-inline">tap a color dot to change it</span></h2>
+          <h2>Breakdown <span class="hint-inline">tap one to rename or recolor</span></h2>
           <div class="seg small" id="groupSeg">
             <button data-group="activity" class="on">Activity</button>
             <button data-group="tag">#Tag</button>
@@ -181,12 +181,22 @@
 
   <!-- color dialog -->
   <dialog id="colorDialog">
-    <h2>Color</h2>
-    <p class="color-what"><strong id="colorWhat" dir="auto"></strong> <span class="muted small" id="colorMode"></span></p>
+    <h2 id="groupTitle">Edit activity</h2>
+    <form id="renameForm" class="rename" autocomplete="off">
+      <label class="field">Name
+        <div class="input-row">
+          <input id="renameInput" dir="auto" maxlength="500">
+          <button type="submit" class="btn" id="renameBtn" disabled>Rename</button>
+        </div>
+      </label>
+      <p class="hint" id="renameHint"></p>
+      <p class="error" id="renameError"></p>
+    </form>
+    <div class="color-head"><span class="label">Color</span> <span class="muted small" id="colorMode"></span></div>
     <div class="swatches" id="swatches"></div>
     <label class="custom-color">Custom color <input type="color" id="customColor"></label>
     <div class="actions">
-      <button type="button" class="btn ghost" id="resetColor">Back to automatic</button>
+      <button type="button" class="btn ghost" id="resetColor">Back to automatic color</button>
       <span class="spacer"></span>
       <button type="button" class="btn primary" id="closeColor">Done</button>
     </div>

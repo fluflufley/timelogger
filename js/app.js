@@ -351,7 +351,7 @@ function renderLog() {
     const pct = st.total ? Math.round((g.ms / st.total) * 100) : 0;
     const c = g.key === '(untagged)' ? OTHER : colorFor(g.key);
     return `<li style="--c:${c}">
-      <div class="bar-head"><span class="bar-label" dir="auto">${g.key === '(untagged)' ? '' : `<button class="swatch" data-color-key="${esc(g.key)}" data-color-label="${esc(g.label)}" style="background:${c}" title="Change color" aria-label="Change color for ${esc(g.label)}"></button>`}${state.groupBy === 'tag' ? esc(g.label) : withTags(g.label)}</span>
+      <div class="bar-head"><span class="bar-label" dir="auto">${g.key === '(untagged)' ? '' : `<button class="swatch" data-color-key="${esc(g.key)}" data-color-label="${esc(g.label)}" style="background:${c}" title="Change color" aria-label="Change color for ${esc(g.label)}"></button>`}${g.key === '(untagged)' ? esc(g.label) : `<button class="bar-name" data-color-key="${esc(g.key)}" data-color-label="${esc(g.label)}" dir="auto">${state.groupBy === 'tag' ? esc(g.label) : withTags(g.label)}</button>`}</span>
       <span class="bar-val">${fmtDur(g.ms)} <span class="muted">· ${pct}%</span></span></div>
       <div class="bar"><span style="width:${(g.ms / max) * 100}%"></span></div></li>`;
   }).join('') : '<li class="empty muted">No tracked time in this range.</li>';
@@ -635,9 +635,92 @@ let colorEditing = null; // { key, label }
 
 function openColor(key, label) {
   colorEditing = { key, label };
-  $('#colorWhat').textContent = label;
+  const isTag = key.startsWith('#');
+  $('#groupTitle').textContent = isTag ? 'Edit tag' : 'Edit activity';
+  $('#renameInput').value = label;
+  $('#renameError').textContent = '';
+  updateRenameHint();
   renderSwatches();
   $('#colorDialog').showModal();
+}
+
+/* ---- renaming an activity or tag everywhere */
+
+const escapeRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function planRename(key, raw) {
+  const isTag = key.startsWith('#');
+  const ops = [];
+  const colors = { ...state.colors };
+  const moveColor = (from, to) => {
+    if (from === to || !colors[from]) return;
+    if (!colors[to]) colors[to] = colors[from];
+    delete colors[from];
+  };
+  if (isTag) {
+    const nt = clean(raw).replace(/^#+/, '');
+    if (!nt) return { error: 'Enter a tag name.' };
+    if (!/^[\p{L}\p{N}_-]+$/u.test(nt)) return { error: 'Tags can use letters, numbers, - and _ only (no spaces).' };
+    const old = key.slice(1);
+    const re = new RegExp(`#${escapeRe(old)}(?![\\p{L}\\p{N}_-])`, 'giu');
+    const affected = state.entries.filter((e) => e.activity && tagsOf(e.activity).includes(old));
+    for (const e of affected) {
+      const next = clean(e.activity.replace(re, '#' + nt));
+      if (next !== e.activity) ops.push({ op: 'update', id: e.id, patch: { activity: next } });
+      moveColor(norm(e.activity), norm(next));
+    }
+    moveColor(key, '#' + nt.toLowerCase());
+    const merge = nt.toLowerCase() !== old && state.entries.some((e) => e.activity && tagsOf(e.activity).includes(nt.toLowerCase()));
+    return { ops, colors, count: affected.length, newKey: '#' + nt.toLowerCase(), newLabel: '#' + nt.toLowerCase(), merge, display: '#' + nt };
+  }
+  const nn = clean(raw);
+  if (!nn) return { error: 'Enter a name.' };
+  // includes the target name's entries, so a merge ends up with exactly the name you typed
+  const affected = state.entries.filter((e) => e.activity && norm(e.activity) === key);
+  const all = state.entries.filter((e) => e.activity && (norm(e.activity) === key || norm(e.activity) === norm(nn)));
+  for (const e of all) if (e.activity !== nn) ops.push({ op: 'update', id: e.id, patch: { activity: nn } });
+  moveColor(key, norm(nn));
+  const merge = norm(nn) !== key && state.entries.some((e) => e.activity && norm(e.activity) === norm(nn));
+  return { ops, colors, count: affected.length, newKey: norm(nn), newLabel: nn, merge, display: nn };
+}
+
+function updateRenameHint() {
+  const { key, label } = colorEditing;
+  const raw = $('#renameInput').value;
+  const plan = planRename(key, raw);
+  const changed = clean(raw) !== label;
+  $('#renameBtn').disabled = !changed || !!plan.error || !plan.ops.length;
+  $('#renameError').textContent = changed && plan.error ? plan.error : '';
+  const n = state.entries.filter((e) => e.activity && (key.startsWith('#') ? tagsOf(e.activity).includes(key.slice(1)) : norm(e.activity) === key)).length;
+  let hint = `Used in ${n} ${n === 1 ? 'entry' : 'entries'}. Renaming changes all of them, across all dates.`;
+  if (changed && !plan.error && plan.merge) hint = `“${plan.display}” already exists, so the two will be combined into one.`;
+  $('#renameHint').textContent = hint;
+}
+
+async function doRename(ev) {
+  ev.preventDefault();
+  const { key } = colorEditing;
+  const plan = planRename(key, $('#renameInput').value);
+  if (plan.error) { $('#renameError').textContent = plan.error; return; }
+  if (!plan.ops.length) return;
+  const msg = `Rename “${colorEditing.label}” to “${plan.display}” in ${plan.count} ${plan.count === 1 ? 'entry' : 'entries'}?`
+    + (plan.merge ? `\n\n“${plan.display}” already exists, so they'll be combined.` : '');
+  if (!confirm(msg)) return;
+  const colorsChanged = JSON.stringify(plan.colors) !== JSON.stringify(state.colors);
+  apply(plan.ops);
+  if (colorsChanged) {
+    state.colors = plan.colors;
+    store.saveSettings({ colors: plan.colors }).catch((err) => toast(err.message, true));
+  }
+  // keep an open edit form in step with the new name
+  const f = $('#editForm');
+  if ($('#editDialog').open && !key.startsWith('#') && norm(f.activity.value) === key) f.activity.value = plan.newLabel;
+  colorEditing = { key: plan.newKey, label: plan.newLabel };
+  $('#renameInput').value = plan.newLabel;
+  recomputeColors();
+  renderSwatches();
+  updateRenameHint();
+  toast(`Renamed ${plan.ops.length} ${plan.ops.length === 1 ? 'entry' : 'entries'}`);
 }
 
 function renderSwatches() {
@@ -856,6 +939,8 @@ $('#swatches').addEventListener('click', (e) => {
   if (b) setColor(colorEditing.key, b.dataset.c);
 });
 $('#editColorRow').addEventListener('click', (e) => { if (!e.target.closest('#editColorBtn')) $('#editColorBtn').click(); });
+$('#renameForm').addEventListener('submit', doRename);
+$('#renameInput').addEventListener('input', updateRenameHint);
 $('#customColor').addEventListener('change', (e) => setColor(colorEditing.key, e.target.value));
 $('#resetColor').addEventListener('click', () => setColor(colorEditing.key, null));
 $('#closeColor').addEventListener('click', () => $('#colorDialog').close());

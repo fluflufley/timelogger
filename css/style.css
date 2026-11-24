@@ -88,6 +88,8 @@ main { max-width: 760px; margin: 0 auto; padding: 16px 14px 80px; }
   cursor: pointer; font-weight: 600; font-size: .92rem; white-space: nowrap;
 }
 .btn:hover { background: var(--soft); }
+.btn:disabled { opacity: .45; cursor: default; }
+#renameBtn:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.ghost { background: transparent; }
@@ -236,7 +238,11 @@ dialog h2 { font-size: 1.15rem; margin-bottom: 14px; }
 .swatches { display: grid; grid-template-columns: repeat(6, 34px); gap: 12px; justify-content: start; margin: 14px 0 16px; }
 .custom-color { display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); font-weight: 600; }
 .custom-color input { width: 44px; height: 32px; padding: 2px; cursor: pointer; }
-.color-what { margin: 0; }
+.color-head { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.rename .field { margin-bottom: 0; }
+.rename .hint { margin-top: 6px; }
+.bar-name { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: start; }
+.bar-name:hover { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
 .color-row { display: flex; align-items: center; gap: 2px; margin: -2px 0 12px; cursor: pointer; }
 .color-row .link { color: var(--accent); margin-left: 8px; font-weight: 600; }
 .hint-inline { font-size: .72rem; font-weight: 500; color: var(--muted); margin-left: 6px; }

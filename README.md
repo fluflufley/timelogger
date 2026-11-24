@@ -6,7 +6,7 @@ A small personal time log. Type what you're doing and press **Start**. The app r
 - **Log**: pick a range (today, yesterday, 7 or 30 days, this month, all, custom). You get totals, a per-day chart and a breakdown by activity or by `#tag`. Below that is every entry, which you can click to edit.
 - **Manual edits**: change the name, start, end or note. You can add a past entry, for example a phone call in the middle of a work block, and choose whether you went back to the work afterwards. You can also delete entries or mark time as untracked.
 - **Export**: CSV for the current range or for everything (opens in Excel or Sheets, Hebrew works), plus a JSON backup you can restore later.
-- **Colors**: tap a colored dot in the Log's breakdown or chart legend, or use "change" in the edit dialog, to pick a color for an activity or tag. Colors you don't set are assigned automatically. Your choices sync across devices.
+- **Rename and recolor**: in the Log, tap an activity or tag in the breakdown (or chart legend) to rename it everywhere it's used, across all dates, or to pick its color. Renaming to a name that already exists combines the two. You can also open this from "change" in an entry's edit dialog. Colors you don't set are assigned automatically, and your choices sync across devices.
 - **Tags**: write `#something` anywhere in an activity name (`Report draft #work`) to group activities by tag.
 - Works offline and syncs when you're back online. Add it to your phone's home screen to use it like an app.
 
