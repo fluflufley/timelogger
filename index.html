@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Timelog</title>
+  <meta name="description" content="Log what you're doing, see where your time goes.">
+  <meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Timelog">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Timelog</div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab active" data-tab="now" role="tab">Now</button>
+      <button class="tab" data-tab="log" role="tab">Log</button>
+    </nav>
+    <button id="menuBtn" class="icon-btn" aria-label="Account and settings">
+      <span id="syncDot" class="dot" title=""></span>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- sign-in (cloud mode only) -->
+    <section id="view-auth" class="view" hidden>
+      <div class="card auth-card">
+        <h1>Where does your time go?</h1>
+        <p class="muted">Sign in to keep your log in sync across your devices.</p>
+        <button id="signInBtn" class="btn primary big">Sign in with Google</button>
+        <p class="error" id="authError"></p>
+      </div>
+    </section>
+
+    <!-- loading -->
+    <section id="view-loading" class="view">
+      <p class="muted center">Loading…</p>
+    </section>
+
+    <!-- NOW -->
+    <section id="view-now" class="view" hidden>
+      <div class="card current" id="current">
+        <div class="current-top">
+          <span class="label" id="curLabel">Now</span>
+          <button id="stopBtn" class="btn ghost small" hidden>Stop</button>
+        </div>
+        <div class="current-activity" id="curActivity" dir="auto"></div>
+        <div class="current-bottom">
+          <span class="timer" id="curTimer"></span>
+          <span class="muted" id="curSince"></span>
+        </div>
+      </div>
+
+      <form id="startForm" class="card start-form" autocomplete="off">
+        <label for="activityInput" class="label">What are you doing now?</label>
+        <div class="input-row">
+          <input id="activityInput" list="activityList" dir="auto" maxlength="500"
+                 placeholder="e.g. Writing the report #work" enterkeyhint="go">
+          <button type="submit" class="btn primary">Start</button>
+        </div>
+        <div class="backdate">
+          <span class="muted">Started</span>
+          <div class="seg" id="offsetSeg">
+            <button type="button" data-off="0" class="on">now</button>
+            <button type="button" data-off="5">5m ago</button>
+            <button type="button" data-off="15">15m ago</button>
+            <button type="button" data-off="30">30m ago</button>
+            <button type="button" data-off="custom">at…</button>
+          </div>
+          <input type="time" id="customTime" hidden aria-label="Start time">
+        </div>
+        <div class="chips" id="recentChips"></div>
+      </form>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Today</h2>
+          <span class="muted" id="todayTotal"></span>
+        </div>
+        <div id="todayRibbon"></div>
+        <ol class="entries" id="todayList"></ol>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section id="view-log" class="view" hidden>
+      <div class="toolbar">
+        <div class="seg scroll" id="rangeSeg">
+          <button data-range="today">Today</button>
+          <button data-range="yesterday">Yesterday</button>
+          <button data-range="week" class="on">7 days</button>
+          <button data-range="month30">30 days</button>
+          <button data-range="thismonth">This month</button>
+          <button data-range="all">All</button>
+          <button data-range="custom">Custom</button>
+        </div>
+        <div class="custom-range" id="customRange" hidden>
+          <input type="date" id="fromDate" aria-label="From"> <span class="muted">to</span>
+          <input type="date" id="toDate" aria-label="To">
+        </div>
+      </div>
+
+      <div class="stats" id="statsGrid"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Breakdown</h2>
+          <div class="seg small" id="groupSeg">
+            <button data-group="activity" class="on">Activity</button>
+            <button data-group="tag">#Tag</button>
+          </div>
+        </div>
+        <div id="chart"></div>
+        <ul class="bars" id="breakdown"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Entries</h2>
+          <button id="addEntryBtn" class="btn small">+ Add entry</button>
+        </div>
+        <div id="logList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Export &amp; backup</h2></div>
+        <div class="btn-row">
+          <button class="btn" id="exportCsvRange">CSV – this range</button>
+          <button class="btn" id="exportCsvAll">CSV – everything</button>
+          <button class="btn" id="exportJson">JSON backup</button>
+          <label class="btn" for="importFile">Restore JSON…</label>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+        <p class="hint">CSV opens in Excel / Google Sheets. JSON is a full backup you can restore later (restoring merges, it doesn't delete anything).</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- edit dialog -->
+  <dialog id="editDialog">
+    <form id="editForm" novalidate>
+      <h2 id="editTitle">Edit entry</h2>
+      <label class="field">Activity
+        <input name="activity" list="activityList" dir="auto" maxlength="500" placeholder="Empty = untracked time">
+      </label>
+      <div class="two">
+        <label class="field">Start
+          <input type="datetime-local" name="start" step="60" required>
+        </label>
+        <label class="field">End
+          <input type="datetime-local" name="end" step="60">
+        </label>
+      </div>
+      <p class="hint" id="endHint"></p>
+      <label class="field" id="thenRow" hidden>Afterwards
+        <select name="then"></select>
+      </label>
+      <label class="field">Note
+        <textarea name="note" rows="2" dir="auto" maxlength="5000"></textarea>
+      </label>
+      <p class="error" id="editError"></p>
+      <div class="actions">
+        <button type="button" id="deleteBtn" class="btn danger">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelEdit" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- menu dialog -->
+  <dialog id="menuDialog">
+    <div class="menu">
+      <h2>Account</h2>
+      <p id="menuMode"></p>
+      <p class="muted" id="menuSync"></p>
+      <div class="btn-col" id="menuActions"></div>
+      <p class="hint">Tip: open this page on your phone and use “Add to Home Screen” to use it like an app.</p>
+      <div class="actions"><span class="spacer"></span><button class="btn ghost" id="closeMenu">Close</button></div>
+    </div>
+  </dialog>
+
+  <datalist id="activityList"></datalist>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
