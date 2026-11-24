@@ -1,4 +1,3 @@
-import { firebaseConfig } from './config.js';
 import {
   LocalStore, createFirebaseStore, newId, readLocalEntries, clearLocalEntries, sanitize,
 } from './store.js';
@@ -811,6 +810,16 @@ document.addEventListener('keydown', (e) => {
 /* ================================================================== boot */
 
 async function boot() {
+  let firebaseConfig;
+  try {
+    ({ firebaseConfig } = await import('./config.js'));
+  } catch (e) {
+    console.error(e);
+    $('#view-loading').innerHTML = `<div class="card"><p class="error">js/config.js has an error, so the app can't start.</p>
+      <p class="hint">It should contain only <code>export const firebaseConfig = { apiKey: "...", ... };</code>
+      with no <code>import</code> lines. Details: ${esc(e.message)}</p></div>`;
+    return;
+  }
   try {
     store = firebaseConfig ? await createFirebaseStore(firebaseConfig) : new LocalStore();
   } catch (e) {
