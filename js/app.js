@@ -1,6 +1,6 @@
 import {
-  LocalStore, createFirebaseStore, newId, readLocalEntries, clearLocalEntries, sanitize,
-} from './store.js';
+  LocalStore, createFirebaseStore, newId, readLocalEntries, clearLocalEntries, sanitize, RULES_MSG,
+} from './store.js?v=8';
 
 /* =============================================================== helpers */
 
@@ -713,7 +713,7 @@ async function doRename(ev) {
   apply(plan.ops);
   if (colorsChanged) {
     state.colors = plan.colors;
-    store.saveSettings({ colors: plan.colors }).catch((err) => toast(err.message, true));
+    Promise.resolve().then(() => store.saveSettings({ colors: plan.colors })).catch((err) => toast(err.message, true));
   }
   // keep an open edit form in step with the new name
   const f = $('#editForm');
@@ -742,7 +742,9 @@ function setColor(key, color) {
   state.colors = colors;
   recomputeColors();
   renderSwatches();
-  store.saveSettings({ colors }).catch((err) => { console.error(err); toast(err.message, true); });
+  Promise.resolve()
+    .then(() => store.saveSettings({ colors }))
+    .catch((err) => { console.error(err); toast(err.message, true); });
 }
 
 function updateEditColor() {
@@ -855,7 +857,7 @@ function toast(msg, bad = false) {
   t.classList.toggle('bad', bad);
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, bad ? 6000 : 2600);
+  toastTimer = setTimeout(() => { t.hidden = true; }, bad ? Math.max(6000, msg.length * 70) : 2600);
 }
 
 /* ================================================================ events */
@@ -985,7 +987,7 @@ document.addEventListener('keydown', (e) => {
 async function boot() {
   let firebaseConfig;
   try {
-    ({ firebaseConfig } = await import('./config.js'));
+    ({ firebaseConfig } = await import('./config.js?v=8'));
   } catch (e) {
     console.error(e);
     $('#view-loading').innerHTML = `<div class="card"><p class="error">js/config.js has an error, so the app can't start.</p>
@@ -1009,6 +1011,7 @@ async function boot() {
       if (!$('#editDialog').open) render();
     },
     onStatus: (s) => { state.sync = s; renderSync(); },
+    onSettingsError: (err) => toast(err.code === 'permission-denied' ? RULES_MSG : 'Couldn\'t load colors: ' + err.message, true),
     onSettings: (st) => {
       state.colors = st.colors || {};
       recomputeColors();

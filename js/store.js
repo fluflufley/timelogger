@@ -8,6 +8,7 @@
 
 const LS_KEY = 'timelog.entries.v1';
 const FB_VERSION = '12.10.0';
+export const RULES_MSG = 'Colors can\'t be saved: your Firestore rules are out of date. In Firebase → Firestore Database → Rules, paste the contents of firestore.rules from the repo and click Publish, then reload.';
 
 export const newId = () =>
   (crypto.randomUUID ? crypto.randomUUID()
@@ -126,9 +127,10 @@ class FirebaseStore {
     this.unsub = null;
   }
 
-  async init({ onEntries, onStatus, onUser, onSettings }) {
+  async init({ onEntries, onStatus, onUser, onSettings, onSettingsError }) {
     const { A, F } = this;
     this.onSettings = onSettings;
+    this.onSettingsError = onSettingsError;
     A.getRedirectResult(this.auth).catch((err) => onStatus?.({ state: 'error', message: err.message }));
     A.onAuthStateChanged(this.auth, (user) => {
       this.user = user;
@@ -143,6 +145,7 @@ class FirebaseStore {
       }, (err) => {
         console.warn('Settings unavailable:', err.message);
         this.settingsError = err;
+        this.onSettingsError?.(err);
       });
       this.unsub = F.onSnapshot(this.col(), { includeMetadataChanges: true }, (snap) => {
         onEntries(sortEntries(snap.docs.map((d) => sanitize({ id: d.id, ...d.data() }))));
@@ -165,9 +168,7 @@ class FirebaseStore {
     try {
       await this.F.setDoc(this.settingsDoc(), { ...clean, updatedAt: this.F.serverTimestamp() });
     } catch (e) {
-      if (e.code === 'permission-denied') {
-        throw new Error('Firestore rules need updating to save colors – paste the new firestore.rules into Firebase (see README)');
-      }
+      if (e.code === 'permission-denied') throw new Error(RULES_MSG);
       throw e;
     }
   }
