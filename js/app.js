@@ -44,6 +44,9 @@ function fromLocalInput(s) { if (!s) return null; const t = new Date(s).getTime(
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clean = (s) => (s || '').trim().replace(/\s+/g, ' ');
 const norm = (s) => clean(s).toLowerCase();
+// ID for an activity (grouping + colors). Tags use '#tag'; activities that
+// themselves start with '#' get an 'a:' prefix so the two can never collide.
+const actKey = (s) => { const k = norm(s); return k.startsWith('#') ? 'a:' + k : k; };
 
 const TAG_RE = /#([\p{L}\p{N}_-]+)/gu;
 const tagsOf = (a) => [...new Set([...(a || '').matchAll(TAG_RE)].map((m) => m[1].toLowerCase()))];
@@ -100,7 +103,7 @@ function recomputeColors() {
   const totals = new Map();
   for (const e of withEnds()) {
     if (!e.activity) continue;
-    const k = norm(e.activity);
+    const k = actKey(e.activity);
     totals.set(k, (totals.get(k) || 0) + (e.end - e.start));
     for (const t of tagsOf(e.activity)) totals.set('#' + t, (totals.get('#' + t) || 0) + (e.end - e.start));
   }
@@ -162,7 +165,7 @@ function groupKeys(activity) {
     const t = tagsOf(activity);
     return t.length ? t.map((x) => '#' + x) : ['(untagged)'];
   }
-  return [norm(activity)];
+  return [actKey(activity)];
 }
 
 function computeStats(rs, re) {
@@ -250,7 +253,7 @@ function renderNow() {
   if (cur) {
     $('#curLabel').textContent = 'Now';
     $('#curActivity').innerHTML = withTags(cur.activity);
-    $('#current').style.setProperty('--c', colorFor(norm(cur.activity)));
+    $('#current').style.setProperty('--c', colorFor(actKey(cur.activity)));
   } else {
     $('#curLabel').textContent = 'Not tracking';
     $('#curActivity').innerHTML = '<span class="muted">Nothing running</span>';
@@ -270,7 +273,7 @@ function renderNow() {
     const a = state.entries[i].activity;
     if (!a || seen.has(norm(a))) continue;
     seen.add(norm(a));
-    chips.push(`<button type="button" class="chip" data-act="${esc(a)}" style="--c:${colorFor(norm(a))}" dir="auto">${withTags(a)}</button>`);
+    chips.push(`<button type="button" class="chip" data-act="${esc(a)}" style="--c:${colorFor(actKey(a))}" dir="auto">${withTags(a)}</button>`);
   }
   $('#recentChips').innerHTML = chips.join('');
 
@@ -300,7 +303,7 @@ function entryRow(e, rs = -Infinity, re = Infinity) {
       <span class="what">${label}</span>
       <span class="dur">${e.end > e.start ? fmtDur(dur) : ''}</span></li>`;
   }
-  return `<li class="entry${e.ongoing ? ' ongoing' : ''}" data-id="${e.id}" tabindex="0" style="--c:${colorFor(norm(e.activity))}">
+  return `<li class="entry${e.ongoing ? ' ongoing' : ''}" data-id="${e.id}" tabindex="0" style="--c:${colorFor(actKey(e.activity))}">
     <span class="when">${carried}${span}</span>
     <span class="what" dir="auto">${withTags(e.activity)}${e.note ? `<span class="note" dir="auto">${esc(e.note)}</span>` : ''}</span>
     <span class="dur">${fmtDur(dur)}</span></li>`;
@@ -314,7 +317,7 @@ function ribbon(rs, re) {
     const en = Math.min(e.end, re);
     const left = ((s - rs) / span) * 100;
     const w = Math.max(((en - s) / span) * 100, 0.15);
-    return `<span class="seg-bar" style="left:${left}%;width:${w}%;--c:${colorFor(norm(e.activity))}" title="${esc(e.activity)} · ${fmtTime(e.start)}–${e.ongoing ? 'now' : fmtTime(e.end)} · ${fmtDur(en - s)}"></span>`;
+    return `<span class="seg-bar" style="left:${left}%;width:${w}%;--c:${colorFor(actKey(e.activity))}" title="${esc(e.activity)} · ${fmtTime(e.start)}–${e.ongoing ? 'now' : fmtTime(e.end)} · ${fmtDur(en - s)}"></span>`;
   }).join('');
   const ticks = [0, 6, 12, 18, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${pad(h % 24 === 0 && h ? 24 : h)}</span>`).join('');
   const nowPos = Date.now() >= rs && Date.now() < re ? `<span class="now-line" style="left:${((Date.now() - rs) / span) * 100}%"></span>` : '';
@@ -667,7 +670,7 @@ function planRename(key, raw) {
     for (const e of affected) {
       const next = clean(e.activity.replace(re, '#' + nt));
       if (next !== e.activity) ops.push({ op: 'update', id: e.id, patch: { activity: next } });
-      moveColor(norm(e.activity), norm(next));
+      moveColor(actKey(e.activity), actKey(next));
     }
     moveColor(key, '#' + nt.toLowerCase());
     const merge = nt.toLowerCase() !== old && state.entries.some((e) => e.activity && tagsOf(e.activity).includes(nt.toLowerCase()));
@@ -676,12 +679,12 @@ function planRename(key, raw) {
   const nn = clean(raw);
   if (!nn) return { error: 'Enter a name.' };
   // includes the target name's entries, so a merge ends up with exactly the name you typed
-  const affected = state.entries.filter((e) => e.activity && norm(e.activity) === key);
-  const all = state.entries.filter((e) => e.activity && (norm(e.activity) === key || norm(e.activity) === norm(nn)));
+  const affected = state.entries.filter((e) => e.activity && actKey(e.activity) === key);
+  const all = state.entries.filter((e) => e.activity && (actKey(e.activity) === key || actKey(e.activity) === actKey(nn)));
   for (const e of all) if (e.activity !== nn) ops.push({ op: 'update', id: e.id, patch: { activity: nn } });
-  moveColor(key, norm(nn));
-  const merge = norm(nn) !== key && state.entries.some((e) => e.activity && norm(e.activity) === norm(nn));
-  return { ops, colors, count: affected.length, newKey: norm(nn), newLabel: nn, merge, display: nn };
+  moveColor(key, actKey(nn));
+  const merge = actKey(nn) !== key && state.entries.some((e) => e.activity && actKey(e.activity) === actKey(nn));
+  return { ops, colors, count: affected.length, newKey: actKey(nn), newLabel: nn, merge, display: nn };
 }
 
 function updateRenameHint() {
@@ -691,7 +694,7 @@ function updateRenameHint() {
   const changed = clean(raw) !== label;
   $('#renameBtn').disabled = !changed || !!plan.error || !plan.ops.length;
   $('#renameError').textContent = changed && plan.error ? plan.error : '';
-  const n = state.entries.filter((e) => e.activity && (key.startsWith('#') ? tagsOf(e.activity).includes(key.slice(1)) : norm(e.activity) === key)).length;
+  const n = state.entries.filter((e) => e.activity && (key.startsWith('#') ? tagsOf(e.activity).includes(key.slice(1)) : actKey(e.activity) === key)).length;
   let hint = `Used in ${n} ${n === 1 ? 'entry' : 'entries'}. Renaming changes all of them, across all dates.`;
   if (changed && !plan.error && plan.merge) hint = `“${plan.display}” already exists, so the two will be combined into one.`;
   $('#renameHint').textContent = hint;
@@ -714,7 +717,7 @@ async function doRename(ev) {
   }
   // keep an open edit form in step with the new name
   const f = $('#editForm');
-  if ($('#editDialog').open && !key.startsWith('#') && norm(f.activity.value) === key) f.activity.value = plan.newLabel;
+  if ($('#editDialog').open && !key.startsWith('#') && actKey(f.activity.value) === key) f.activity.value = plan.newLabel;
   colorEditing = { key: plan.newKey, label: plan.newLabel };
   $('#renameInput').value = plan.newLabel;
   recomputeColors();
@@ -747,8 +750,8 @@ function updateEditColor() {
   $('#editColorRow').hidden = !a;
   if (!a) return;
   const btn = $('#editColorBtn');
-  btn.style.background = colorFor(norm(a));
-  btn.dataset.colorKey = norm(a);
+  btn.style.background = colorFor(actKey(a));
+  btn.dataset.colorKey = actKey(a);
   btn.dataset.colorLabel = a;
   $('#editColorText').textContent = `Color for all “${a}” entries`;
 }
